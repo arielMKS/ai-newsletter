@@ -2,24 +2,23 @@ import os
 import smtplib
 import feedparser
 import anthropic
-import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
 from bs4 import BeautifulSoup
 
 # ── Config (set these as environment variables) ──────────────────────────────
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-GMAIL_ADDRESS     = os.environ["GMAIL_ADDRESS"]       # your Gmail address
-GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"] # Gmail App Password (not your login password)
-RECIPIENT_EMAIL   = os.environ.get("RECIPIENT_EMAIL", GMAIL_ADDRESS)
-NUM_ARTICLES      = int(os.environ.get("NUM_ARTICLES", "8"))
+ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
+GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
+GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
+RECIPIENT_EMAIL    = os.environ.get("RECIPIENT_EMAIL", GMAIL_ADDRESS)
+NUM_ARTICLES       = int(os.environ.get("NUM_ARTICLES", "8"))
 
 # ── RSS feeds for AI news ────────────────────────────────────────────────────
 RSS_FEEDS = [
     "https://news.google.com/rss/search?q=artificial+intelligence+AI&hl=en-US&gl=US&ceid=US:en",
-    "https://feeds.feedburner.com/venturebeat/SZYF",  # VentureBeat AI
-    "https://www.technologyreview.com/feed/",          # MIT Tech Review
+    "https://feeds.feedburner.com/venturebeat/SZYF",
+    "https://www.technologyreview.com/feed/",
 ]
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -36,11 +35,10 @@ def fetch_articles(num: int) -> list[dict]:
             if not title or not link or title in seen:
                 continue
             seen.add(title)
-            # Try to grab a short snippet from the entry summary
             raw_summary = entry.get("summary", "") or entry.get("description", "")
             snippet = BeautifulSoup(raw_summary, "html.parser").get_text()[:400]
             articles.append({"title": title, "link": link, "snippet": snippet})
-            if len(articles) >= num * 2:   # collect extra, Claude will pick best
+            if len(articles) >= num * 2:
                 break
         if len(articles) >= num * 2:
             break
@@ -48,34 +46,54 @@ def fetch_articles(num: int) -> list[dict]:
 
 
 def summarize_articles(articles: list[dict], keep: int) -> list[dict]:
-    """Use Claude to pick the most newsworthy articles and summarize each."""
-    article_text = "\n\n".join(
-        f"[{i+1}] TITLE: {a['title']}\nSNIPPET: {a['snippet']}\nURL: {a['link']}"
-        for i, a in enumerate(articles)
+    """
+    Two-step approach — no JSON, no truncation risk:
+      1. One small call to pick the best article numbers.
+      2. One tiny call per article to write a 2-sentence summary.
+    """
+    # Step 1: pick the most newsworthy articles
+    article_list = "\n".join(f"[{i+1}] {a['title']}" for i, a in enumerate(articles))
+    pick_prompt = (
+        f"Here are {len(articles)} AI news headlines. "
+        f"Reply with ONLY a comma-separated list of the {keep} most newsworthy numbers, "
+        f"covering a variety of topics. Example format: 1,4,7,9,2\n\n{article_list}"
     )
-
-    prompt = f"""You are an AI news editor. Below are {len(articles)} recent AI articles.
-
-Your job:
-1. Select the {keep} most important / newsworthy articles covering a variety of topics.
-2. For each selected article write a 2-3 sentence summary in plain English — clear, insightful, no hype.
-3. Return ONLY a JSON array (no markdown fences) with objects like:
-   {{"rank": 1, "title": "...", "url": "...", "summary": "..."}}
-
-ARTICLES:
-{article_text}"""
-
-    response = client.messages.create(
+    pick_resp = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
+        max_tokens=64,
+        messages=[{"role": "user", "content": pick_prompt}],
     )
+    raw_picks = pick_resp.content[0].text.strip()
 
-    import json, re
-    raw = response.content[0].text
-    # Strip any accidental markdown fences
-    raw = re.sub(r"```(?:json)?|```", "", raw).strip()
-    return json.loads(raw)
+    try:
+        indices = [int(x.strip()) - 1 for x in raw_picks.split(",") if x.strip().isdigit()]
+        indices = [i for i in indices if 0 <= i < len(articles)][:keep]
+        if not indices:
+            raise ValueError("empty")
+    except Exception:
+        indices = list(range(min(keep, len(articles))))
+
+    selected = [articles[i] for i in indices]
+
+    # Step 2: summarise each article individually (tiny, safe calls)
+    results = []
+    for art in selected:
+        summ_prompt = (
+            "Write exactly 2 sentences summarising this AI news article. "
+            "Plain English, no hype, no bullet points.\n\n"
+            f"Title: {art['title']}\n"
+            f"Snippet: {art['snippet']}"
+        )
+        summ_resp = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=120,
+            messages=[{"role": "user", "content": summ_prompt}],
+        )
+        summary = summ_resp.content[0].text.strip()
+        results.append({"title": art["title"], "url": art["link"], "summary": summary})
+        print(f"   ✓ {art['title'][:70]}")
+
+    return results
 
 
 def build_html(summaries: list[dict]) -> str:
@@ -119,7 +137,7 @@ def build_html(summaries: list[dict]) -> str:
         <!-- Intro -->
         <tr><td style="background:#fff;padding:24px 32px 8px;">
           <p style="margin:0;color:#555;font-size:15px;line-height:1.6;">
-            Good morning! Here are today's top {len(summaries)} developments in AI — 
+            Good morning! Here are today's top {len(summaries)} developments in AI —
             curated and summarised just for you.
           </p>
         </td></tr>
