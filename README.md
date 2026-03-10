@@ -1,7 +1,8 @@
 # 🤖 AI Morning Brief — Setup Guide
 
 A daily newsletter that emails you the top AI news every morning at 9 AM,
-with each article summarised by Claude.
+with each article summarised by Claude. Runs entirely on GitHub — no extra
+accounts or servers needed.
 
 ---
 
@@ -11,7 +12,6 @@ with each article summarised by Claude.
 |---|---|
 | **Anthropic API key** | platform.anthropic.com → API Keys |
 | **Gmail App Password** | See Step 2 below |
-| **Railway account** | railway.app (free tier) |
 | **GitHub account** | github.com (free) |
 
 ---
@@ -20,7 +20,7 @@ with each article summarised by Claude.
 
 1. Go to **platform.anthropic.com** and sign in.
 2. Click **API Keys** → **Create Key**.
-3. Copy it — you'll paste it into Railway later.
+3. Copy it — you'll paste it into GitHub later.
 
 > New accounts get $5 free credit. Each daily newsletter costs roughly $0.01–0.02.
 
@@ -38,67 +38,85 @@ Google requires an "App Password" instead of your real password for SMTP.
 
 ---
 
-## Step 3 — Push code to GitHub
+## Step 3 — Create a GitHub repo and upload files
 
-1. Create a new **private** GitHub repo (e.g. `ai-newsletter`)
-2. Upload these four files into it:
+1. Go to **github.com** → **New repository**
+2. Name it `ai-newsletter`, set it to **Private**, click **Create**
+3. Upload these two files into the root of the repo:
    - `newsletter.py`
    - `requirements.txt`
-   - `Dockerfile`
-   - `railway.json`
+4. Then create the workflow file by clicking **Add file → Create new file**,
+   type `.github/workflows/newsletter.yml` in the filename box (GitHub creates
+   the folders automatically), paste the contents of `newsletter.yml`, and commit.
 
 ---
 
-## Step 4 — Deploy to Railway
+## Step 4 — Add your secrets to GitHub
 
-1. Go to **railway.app** → **New Project** → **Deploy from GitHub repo**
-2. Select your `ai-newsletter` repo
-3. Once imported, click **Variables** and add these five:
+GitHub Actions uses encrypted "Secrets" so your passwords never appear in code.
 
-| Variable | Value |
+1. In your repo go to **Settings → Secrets and variables → Actions**
+2. Click **New repository secret** and add each of these:
+
+| Secret name | Value |
 |---|---|
 | `ANTHROPIC_API_KEY` | your Anthropic key |
 | `GMAIL_ADDRESS` | you@gmail.com |
 | `GMAIL_APP_PASSWORD` | the 16-char app password |
-| `RECIPIENT_EMAIL` | who gets the email (can be same as above) |
-| `NUM_ARTICLES` | `8` (or `5` or `10`) |
-
-4. Railway reads `railway.json` automatically — the cron `"0 9 * * *"` means **9:00 AM UTC**.
-
-> **Timezone note:** If you're in a different timezone, adjust the hour:
-> - US Eastern (EST): use `0 14 * * *` (9 AM EST = 2 PM UTC)
-> - US Pacific (PST): use `0 17 * * *`
-> - UK (GMT): use `0 9 * * *` ✓
+| `RECIPIENT_EMAIL` | who gets the email (can be same Gmail) |
 
 ---
 
-## Step 5 — Test it immediately
+## Step 5 — Adjust your timezone
 
-In Railway, go to your service → **Settings** → **Trigger Run** to fire it right now
-and confirm the email arrives before waiting until morning.
+Open `newsletter.yml` and find this line:
+
+```yaml
+- cron: "0 14 * * *"   # 9 AM EST
+```
+
+Change the hour to match your timezone (the schedule runs in UTC):
+
+| Your timezone | Cron for 9 AM |
+|---|---|
+| US Eastern (EST) | `0 14 * * *` |
+| US Central (CST) | `0 15 * * *` |
+| US Mountain (MST) | `0 16 * * *` |
+| US Pacific (PST) | `0 17 * * *` |
+| UK (GMT) | `0 9 * * *` |
+| Central Europe (CET) | `0 8 * * *` |
+
+---
+
+## Step 6 — Test it immediately
+
+1. In your repo, click the **Actions** tab
+2. Click **AI Morning Brief** in the left sidebar
+3. Click **Run workflow** → **Run workflow**
+4. Within ~30 seconds your email should arrive!
 
 ---
 
 ## Customising news topics
 
-To focus on a specific AI sub-topic, edit the Google News RSS URL in `newsletter.py`:
+Edit the Google News RSS URL in `newsletter.py`:
 
 ```python
 # Current (general AI):
 "https://news.google.com/rss/search?q=artificial+intelligence+AI&hl=en-US&gl=US&ceid=US:en"
 
 # Examples:
-# LLMs only:   q=large+language+models+LLM
-# AI safety:   q=AI+safety+alignment
-# AI + business: q=AI+enterprise+business
+# LLMs only:      q=large+language+models+LLM
+# AI safety:      q=AI+safety+alignment
+# AI + business:  q=AI+enterprise+business
 ```
 
 ---
 
 ## Costs
 
-- **Railway**: Free tier includes 500 hours/month — a daily cron job uses ~1 minute/day, well within limits.
-- **Anthropic API**: ~$0.01–0.02 per run (8 article summaries with claude-sonnet).
+- **GitHub Actions**: Free tier = 2,000 min/month. Each run ≈ 1 min → ~30/month, well within limits.
+- **Anthropic API**: ~$0.01–0.02 per run.
 - **Gmail SMTP**: Free.
 
 Total: essentially **free**.

@@ -1,0 +1,31 @@
+name: AI Morning Brief
+
+on:
+  schedule:
+    - cron: "0 14 * * *"   # 9 AM EST / 6 AM PST — adjust to your timezone (UTC)
+  workflow_dispatch:         # lets you trigger it manually from GitHub with one click
+
+jobs:
+  send-newsletter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run newsletter
+        env:
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_ADDRESS:        ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL:      ${{ secrets.RECIPIENT_EMAIL }}
+          NUM_ARTICLES:         "8"
+        run: python newsletter.py
