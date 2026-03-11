@@ -12,7 +12,7 @@ ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
 GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 RECIPIENT_EMAIL    = os.environ.get("RECIPIENT_EMAIL", GMAIL_ADDRESS)
-NUM_ARTICLES       = int(os.environ.get("NUM_ARTICLES", "8"))
+NUM_ARTICLES       = int(os.environ.get("NUM_ARTICLES", "5"))
 
 # ── RSS feeds for AI news ────────────────────────────────────────────────────
 RSS_FEEDS = [
