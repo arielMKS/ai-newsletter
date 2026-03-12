@@ -2,7 +2,7 @@ name: AI Morning Brief
 
 on:
   schedule:
-    - cron: "0 14 * * *"   # 9 AM EST / 6 AM PST — adjust to your timezone (UTC)
+    - cron: "0 17 * * *"   # 9 AM EST — adjust to your timezone (UTC)
   workflow_dispatch:         # lets you trigger it manually from GitHub with one click
 
 jobs:
